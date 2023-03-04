@@ -3,78 +3,71 @@ This script automates the process of moving files between four folders ('archive
 in the 'Documents' folder. It moves files with a change in date at midnight. When files are moved from 'today' to 'yesterday', 
 from 'yesterday' to 'day before yesterday', and from 'day before yesterday' to 'archive'. Files in the 'archive' folder are not moved.
 """
-
 import os
 import shutil
 import datetime
 import time
 
-def create_folders():
-    """
-    Creates the four folders ('archive', 'day before yesterday', 'yesterday', 'today') in the 'Documents' folder, if they don't exist.
-    """
-    path_to_folder = os.path.join(os.path.expanduser("~"), "Documents")
-    for folder in ['archive', 'day before yesterday', 'yesterday', 'today']:
-        folder_path = os.path.join(path_to_folder, folder)
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
+# ścieżki folderów
+doc_folder = os.path.join(os.path.expanduser('~'), 'Documents')
+today_folder = os.path.join(doc_folder, 'today')
+yesterday_folder = os.path.join(doc_folder, 'yesterday')
+day_before_yesterday_folder = os.path.join(doc_folder, 'day_before_yesterday')
+archive_folder = os.path.join(doc_folder, 'archive')
+last_date_file = os.path.join(doc_folder, 'last_date.txt')
 
-def move_files(source, destination):
-    """
-    Moves all files from the source folder to the destination folder.
-    """
-    for file in os.listdir(source):
-        file_path = os.path.join(source, file)
-        if os.path.isfile(file_path):
-            shutil.move(file_path, destination)
+# utworzenie folderów jeśli nie istnieją
+for folder in (today_folder, yesterday_folder, day_before_yesterday_folder, archive_folder):
+    if not os.path.exists(folder):
+        os.makedirs(folder)
 
-def check_for_date_change():
-    """
-    Checks if the current date has changed since the last known date, and moves files to the appropriate folders if necessary.
-    """
-    # Load the last known date from a file
-    path_to_folder = os.path.join(os.path.expanduser("~"), "Documents")
-    last_date_file = os.path.join(path_to_folder, "last_date.txt")
-    if os.path.isfile(last_date_file):
-        with open(last_date_file, "r") as f:
-            last_date_str = f.read()
-            last_date = datetime.datetime.strptime(last_date_str, "%Y-%m-%d")
-    else:
-        # If the file does not exist, set the last known date to the current date
-        last_date = datetime.datetime.now().date()
+# wczytanie daty ostatniego uruchomienia programu
+def get_last_date():
 
-    # Check if the current date is different from the last known date
-    current_date = datetime.datetime.now().date()
-    if current_date > last_date:
-        # Move files from 'today' to 'yesterday'
-        move_files(os.path.join(path_to_folder, 'today'), os.path.join(path_to_folder, 'yesterday'))
-
-        # Move files from 'yesterday' to 'day before yesterday'
-        move_files(os.path.join(path_to_folder, 'yesterday'), os.path.join(path_to_folder, 'day before yesterday'))
-
-        # Move files from 'day before yesterday' to 'archive'
-        move_files(os.path.join(path_to_folder, 'day before yesterday'), os.path.join(path_to_folder, 'archive'))
-
-        # Save the current date to the file
-        with open(last_date_file, "w") as f:
-            f.write(str(current_date))
+    try:
+        with open(last_date_file, 'r') as f:
+            last_date_str = f.read().strip()
+            last_date = datetime.datetime.strptime(last_date_str, '%Y-%m-%d %H:%M:%S')
+            return last_date
+    except:
+        last_date = datetime.datetime.now()
+        return last_date
 
 
-if __name__ == '__main__':
-    create_folders()
-    check_for_date_change()
-    while True:
-        now = datetime.datetime.now()
-        
-        # Check if it's midnight
-        if now.hour == 0 and now.minute == 0:
-            # Move files from 'today' to 'yesterday'
-            move_files(os.path.join(path_to_folder, 'today'), os.path.join(path_to_folder, 'yesterday'))
-            
-            # Move files from 'yesterday' to 'day before yesterday'
-            move_files(os.path.join(path_to_folder, 'yesterday'), os.path.join(path_to_folder, 'day before yesterday'))
-            
-            # Move files from 'day before yesterday' to 'archive'
-            move_files(os.path.join(path_to_folder, 'day before yesterday'), os.path.join(path_to_folder, 'archive'))
-        
-        time.sleep(300) # Wait 5 minutes before checking again
+# główna pętla programu
+while True:
+    # aktualna data i czas
+    now = datetime.datetime.now()
+    last_date = get_last_date()
+    # różnica czasu w dniach
+    delta = (now - last_date).days
+    
+    # przenoszenie plików
+    if delta == 1:
+        for src, dst in [(day_before_yesterday_folder, archive_folder), (yesterday_folder, day_before_yesterday_folder),(today_folder, yesterday_folder)
+                         ]:
+            for file in os.listdir(src):
+                src_file = os.path.join(src, file)
+                dst_file = os.path.join(dst, file)
+                shutil.move(src_file, dst_file)
+    elif delta == 2:
+        for src, dst in [(day_before_yesterday_folder, archive_folder), (yesterday_folder, archive_folder),(today_folder, day_before_yesterday_folder)
+                         ]:
+            for file in os.listdir(src):
+                src_file = os.path.join(src, file)
+                dst_file = os.path.join(dst, file)
+                shutil.move(src_file, dst_file)
+    elif delta >= 3:
+        for src in [today_folder, yesterday_folder, day_before_yesterday_folder]:
+            for file in os.listdir(src):
+                src_file = os.path.join(src, file)
+                dst_file = os.path.join(archive_folder, file)
+                shutil.move(src_file, dst_file)
+
+    # aktualizacja daty ostatniego uruchomienia programu
+    last_date = now
+    with open(last_date_file, 'w') as f:
+        f.write(last_date.strftime('%Y-%m-%d %H:%M:%S'))
+
+    # oczekiwanie jedną minutę
+    time.sleep(60)
